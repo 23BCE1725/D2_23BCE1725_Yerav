@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="/static/images/favicon.svg">
+  <title>Delivery Tracking — Feed Forward</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root{--green:#1a6b3c;--lime:#7ec845;--cream:#faf7f2;--card:#fff;--text:#1c2b1a;--muted:#6b7c6b;--orange:#f59e0b;--red:#e05252;}
+    *{margin:0;padding:0;box-sizing:border-box;font-family:'DM Sans',sans-serif;}
+    body{background:var(--cream);color:var(--text);}
+    header{background:var(--green);padding:14px 5%;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:999;box-shadow:0 2px 12px rgba(0,0,0,.25);}
+    .brand{display:flex;align-items:center;gap:12px;color:#fff;text-decoration:none;}
+    .brand img{height:42px;}
+    .brand-text{font-family:'Playfair Display',serif;font-size:1.35rem;color:#fff;}
+    nav a{color:rgba(255,255,255,.85);text-decoration:none;margin-left:22px;font-size:.92rem;}
+    nav a:hover{color:#fff;}
+    .main{max-width:1200px;margin:0 auto;padding:36px 20px;}
+    h1{font-family:'Playfair Display',serif;font-size:2rem;margin-bottom:6px;}
+    .sub{color:var(--muted);margin-bottom:28px;}
+    .layout{display:grid;grid-template-columns:380px 1fr;gap:24px;}
+    @media(max-width:900px){.layout{grid-template-columns:1fr;}}
+    .orders-list{display:flex;flex-direction:column;gap:14px;max-height:70vh;overflow-y:auto;padding-right:4px;}
+    .order-card{background:var(--card);border-radius:16px;padding:18px;box-shadow:0 3px 14px rgba(0,0,0,.07);cursor:pointer;border:2px solid transparent;transition:.2s;}
+    .order-card:hover,.order-card.active{border-color:var(--green);}
+    .order-num{font-size:.78rem;color:var(--muted);font-weight:600;margin-bottom:4px;}
+    .order-name{font-family:'Playfair Display',serif;font-size:1.1rem;margin-bottom:4px;}
+    .order-meta{font-size:.83rem;color:var(--muted);line-height:1.6;}
+    .status-pill{display:inline-flex;align-items:center;gap:5px;padding:4px 12px;border-radius:20px;font-size:.75rem;font-weight:700;margin-top:8px;}
+    .s-pending{background:#fff8e1;color:#e67e22;}
+    .s-assigned{background:#e8f4fd;color:#2980b9;}
+    .s-picked{background:#eaf5fb;color:#1a6b8a;}
+    .s-delivered{background:#edfaf1;color:var(--green);}
+    .s-cancelled{background:#fdeaea;color:var(--red);}
+    /* Map */
+    .map-card{background:var(--card);border-radius:18px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.08);}
+    #deliveryMap{width:100%;height:430px;}
+    .map-footer{padding:16px 20px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+    .btn{padding:10px 18px;border:none;border-radius:10px;font-size:.88rem;font-weight:600;cursor:pointer;transition:.2s;}
+    .btn-green{background:var(--green);color:#fff;}
+    .btn-green:hover{background:#0f4a27;}
+    .btn-outline{background:none;border:1.5px solid var(--green);color:var(--green);}
+    .btn-outline:hover{background:var(--green);color:#fff;}
+    .btn-red{background:var(--red);color:#fff;}
+    .status-select{padding:9px 14px;border:1.5px solid #dde8d8;border-radius:10px;font-size:.88rem;background:#fcfdf9;}
+    /* Steps */
+    .steps{display:flex;align-items:center;padding:0 20px 12px;gap:0;}
+    .step{display:flex;flex-direction:column;align-items:center;flex:1;position:relative;}
+    .step::before{content:'';position:absolute;top:14px;left:-50%;width:100%;height:2px;background:#e5e5e5;z-index:0;}
+    .step:first-child::before{display:none;}
+    .step-dot{width:28px;height:28px;border-radius:50%;background:#e5e5e5;display:flex;align-items:center;justify-content:center;font-size:.75rem;z-index:1;transition:.3s;}
+    .step-dot.done{background:var(--green);color:#fff;}
+    .step-dot.active{background:var(--lime);color:#1a3a0e;}
+    .step-label{font-size:.68rem;color:var(--muted);margin-top:6px;text-align:center;}
+    .toast{position:fixed;bottom:24px;right:24px;background:var(--green);color:#fff;padding:14px 22px;border-radius:12px;font-weight:600;box-shadow:0 6px 20px rgba(0,0,0,.2);display:none;z-index:9999;}
+    .empty{text-align:center;padding:60px;color:var(--muted);}
+    .empty i{font-size:2.5rem;margin-bottom:14px;display:block;opacity:.4;}
+    .tracking-dot{width:18px;height:18px;background:var(--lime);border:3px solid var(--green);border-radius:50%;animation:pulse2 1.5s infinite;}
+    @keyframes pulse2{0%,100%{box-shadow:0 0 0 0 rgba(126,200,69,.6)}50%{box-shadow:0 0 0 10px rgba(126,200,69,0)}}
+  </style>
+</head>
+<body>
+<header>
+  <a class="brand" href="/">
+    <img src="/static/images/logo.png" alt="Logo">
+    <div><div class="brand-text">Feed Forward</div></div>
+  </a>
+  <nav>
+    <a href="/"><i class="fa fa-home"></i> Home</a>
+    {% if service == 'receiver' %}<a href="/receiver"><i class="fa fa-utensils"></i> Browse Food</a>{% endif %}
+    {% if service == 'provider' %}<a href="/provider"><i class="fa fa-plus"></i> Add Food</a>{% endif %}
+    <a href="/logout"><i class="fa fa-sign-out-alt"></i> Logout</a>
+  </nav>
+</header>
+
+<div class="main">
+  <h1>🚚 Delivery Tracking</h1>
+  <p class="sub">Real-time delivery map and order management.</p>
+
+  {% if orders %}
+  <div class="layout">
+    <!-- ORDER LIST -->
+    <div>
+      <h3 style="margin-bottom:14px;font-family:'Playfair Display',serif;">Your Orders</h3>
+      <div class="orders-list">
+        {% for o in orders %}
+        <div class="order-card" id="oc-{{o[0]}}" onclick="selectOrder({{o[0]}},{{o[4] or 'null'}},{{o[5] or 'null'}},{{o[7] or 'null'}},{{o[8] or 'null'}})">
+          <div class="order-num">ORDER #{{o[0]}}</div>
+          <div class="order-name">{{o[1]}}</div>
+          <div class="order-meta">
+            <i class="fa fa-store"></i> {{o[2]}}<br>
+            <i class="fa fa-map-pin"></i> {{o[3]}}<br>
+            <i class="fa fa-user"></i> {{o[9] if service=='provider' else o[10]}}
+          </div>
+          <span class="status-pill s-{{o[6]}}">
+            {% if o[6]=='pending' %}<i class="fa fa-clock"></i>{% elif o[6]=='assigned' %}<i class="fa fa-motorcycle"></i>{% elif o[6]=='picked' %}<i class="fa fa-box"></i>{% elif o[6]=='delivered' %}<i class="fa fa-check-circle"></i>{% else %}<i class="fa fa-times"></i>{% endif %}
+            {{o[6].upper()}}
+          </span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- MAP PANEL -->
+    <div class="map-card">
+      <div class="steps" id="stepsBar">
+        <div class="step"><div class="step-dot" id="step-pending"><i class="fa fa-clock"></i></div><div class="step-label">Pending</div></div>
+        <div class="step"><div class="step-dot" id="step-assigned"><i class="fa fa-motorcycle"></i></div><div class="step-label">Assigned</div></div>
+        <div class="step"><div class="step-dot" id="step-picked"><i class="fa fa-box"></i></div><div class="step-label">Picked Up</div></div>
+        <div class="step"><div class="step-dot" id="step-delivered"><i class="fa fa-check"></i></div><div class="step-label">Delivered</div></div>
+      </div>
+      <div id="deliveryMap"></div>
+      <div class="map-footer">
+        <span id="selectedInfo" style="font-size:.85rem;color:var(--muted);flex:1;">Select an order to view on map</span>
+        {% if service == 'provider' %}
+        <select class="status-select" id="statusSel">
+          <option value="pending">Pending</option>
+          <option value="assigned">Assigned</option>
+          <option value="picked">Picked Up</option>
+          <option value="delivered">Delivered</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
+        <button class="btn btn-green" onclick="updateStatus()"><i class="fa fa-save"></i> Update</button>
+        {% endif %}
+        <button class="btn btn-outline" onclick="shareLocation()"><i class="fa fa-location-arrow"></i> Share Location</button>
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <div class="empty"><i class="fa fa-inbox"></i><p>No orders yet.</p></div>
+  {% endif %}
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<script>
+const MAPS_KEY="{{ maps_key }}";
+const MY_EMAIL="{{ email }}";
+let dMap, dMarker, destMarker, deliveryMarker, selectedOrderId=null, shareInterval=null;
+const STEPS=['pending','assigned','picked','delivered'];
+
+function initDeliveryMap(){
+  dMap=new google.maps.Map(document.getElementById('deliveryMap'),{
+    zoom:13,center:{lat:12.84,lng:80.15},mapTypeControl:false,streetViewControl:false
+  });
+}
+
+function selectOrder(id,foodLat,foodLng,delivLat,delivLng){
+  selectedOrderId=id;
+  document.querySelectorAll('.order-card').forEach(c=>c.classList.remove('active'));
+  document.getElementById('oc-'+id)?.classList.add('active');
+  document.getElementById('selectedInfo').textContent='Order #'+id+' selected';
+
+  if(!dMap) return;
+  dMap.setZoom(14);
+
+  // Food source marker
+  if(foodLat && foodLng){
+    const pos={lat:foodLat,lng:foodLng};
+    dMap.setCenter(pos);
+    if(destMarker) destMarker.setMap(null);
+    destMarker=new google.maps.Marker({position:pos,map:dMap,title:"Food Source",
+      icon:{url:"https://maps.google.com/mapfiles/ms/icons/restaurant.png"}});
+  }
+
+  // Delivery marker (live position)
+  if(delivLat && delivLng){
+    const pos2={lat:delivLat,lng:delivLng};
+    if(deliveryMarker) deliveryMarker.setMap(null);
+    deliveryMarker=new google.maps.Marker({position:pos2,map:dMap,title:"Delivery",
+      icon:{url:"https://maps.google.com/mapfiles/ms/icons/motorcycling.png"}});
+    // Draw route
+    if(foodLat && foodLng){
+      const svc=new google.maps.DirectionsService();
+      const renderer=new google.maps.DirectionsRenderer({map:dMap,suppressMarkers:true});
+      svc.route({origin:{lat:delivLat,lng:delivLng},destination:{lat:foodLat,lng:foodLng},travelMode:'DRIVING'},
+        (result,status)=>{ if(status==='OK') renderer.setDirections(result); });
+    }
+  }
+
+  // Status steps
+  const card=document.getElementById('oc-'+id);
+  const pill=card?.querySelector('.status-pill');
+  const status=pill?.className.replace('status-pill s-','').trim();
+  updateStepBar(status);
+  if(document.getElementById('statusSel')) document.getElementById('statusSel').value=status||'pending';
+}
+
+function updateStepBar(status){
+  const idx=STEPS.indexOf(status);
+  STEPS.forEach((s,i)=>{
+    const dot=document.getElementById('step-'+s);
+    if(!dot) return;
+    dot.className='step-dot'+(i<idx?' done':i===idx?' active':'');
+  });
+}
+
+function updateStatus(){
+  if(!selectedOrderId){ showToast("Select an order first"); return; }
+  const status=document.getElementById('statusSel').value;
+  fetch('/api/update-order-status',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({order_id:selectedOrderId,status})})
+    .then(r=>r.json()).then(d=>{ if(d.ok){ showToast("Status updated to "+status.toUpperCase()); updateStepBar(status); } });
+}
+
+function shareLocation(){
+  if(!selectedOrderId){ showToast("Select an order first"); return; }
+  if(!navigator.geolocation){ showToast("Geolocation not supported"); return; }
+  if(shareInterval){ clearInterval(shareInterval); shareInterval=null; showToast("Location sharing stopped"); return; }
+  showToast("📍 Sharing live location…");
+  shareInterval=setInterval(()=>{
+    navigator.geolocation.getCurrentPosition(pos=>{
+      const lat=pos.coords.latitude, lng=pos.coords.longitude;
+      fetch('/api/update-delivery-location',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({order_id:selectedOrderId,lat,lng})});
+    });
+  },5000);
+}
+
+// ── Real-time ─────────────────────────────────────────────────────────────────
+const socket=io();
+socket.on('delivery_update', d=>{
+  if(d.order_id!==selectedOrderId) return;
+  const pos={lat:parseFloat(d.lat),lng:parseFloat(d.lng)};
+  if(deliveryMarker){ deliveryMarker.setPosition(pos); dMap.panTo(pos); }
+  else if(dMap){
+    deliveryMarker=new google.maps.Marker({position:pos,map:dMap,title:"Delivery",
+      icon:{url:"https://maps.google.com/mapfiles/ms/icons/motorcycling.png"}});
+  }
+});
+socket.on('order_status', d=>{
+  if(d.order_id===selectedOrderId) updateStepBar(d.status);
+  showToast(`Order #${d.order_id}: ${d.status.toUpperCase()}`);
+});
+
+function showToast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.style.display='block'; setTimeout(()=>t.style.display='none',4000); }
+
+window.addEventListener('load',()=>{ if(MAPS_KEY) initDeliveryMap(); });
+</script>
+{% if maps_key %}
+<script src="https://maps.googleapis.com/maps/api/js?key={{ maps_key }}" async defer></script>
+{% endif %}
+</body>
+</html>
